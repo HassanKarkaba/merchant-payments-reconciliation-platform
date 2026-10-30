@@ -1,0 +1,9 @@
+.local/
+.env
+*.py[cod]
+__pycache__/
+.venv/
+.pytest_cache/
+*.sqlite3
+*.log
+.DS_Store

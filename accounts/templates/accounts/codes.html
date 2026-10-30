@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>Save your recovery codes</h1><p>These ten codes are shown once. Each replaces an authenticator code for one sign-in. Store them outside this browser.</p><div class="panel codes">{% for code in codes %}<code>{{ code }}</code>{% endfor %}</div><a class="button" href="/">I have saved my codes</a>{% endblock %}

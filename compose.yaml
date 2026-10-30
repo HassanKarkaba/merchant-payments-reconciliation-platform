@@ -1,0 +1,126 @@
+x-app: &app
+  image: ${COMPOSE_PROJECT_NAME:-mprp_local}:app
+  build:
+    context: .
+    target: runtime
+  environment: &environment
+    DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Run local.sh init}
+    FACTOR_ENCRYPTION_KEY: ${FACTOR_ENCRYPTION_KEY:?Run local.sh init}
+    MPRP_ENVIRONMENT_ID: ${MPRP_ENVIRONMENT_ID:?Run local.sh init}
+    SIMULATOR_API_KEY: ${SIMULATOR_API_KEY:?Run local.sh init}
+    CALLBACK_HMAC_KEY: ${CALLBACK_HMAC_KEY:?Run local.sh init}
+    DATABASE_URL: postgresql://mprp_runtime:${DB_RUNTIME_PASSWORD}@db:5432/mprp
+    SIMULATOR_ORIGIN: http://simulator:8001
+    DJANGO_DEBUG: '0'
+    PUBLIC_ORIGIN: http://localhost:${WEB_PORT:-8000}
+  stop_grace_period: 30s
+services:
+  db:
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    environment:
+      POSTGRES_DB: mprp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD}
+      DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD}
+      DB_PURGE_PASSWORD: ${DB_PURGE_PASSWORD}
+    volumes:
+      - main_db:/var/lib/postgresql/data
+    healthcheck: &db-health
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U postgres']
+      interval: 2s
+      timeout: 2s
+      retries: 60
+  simulator_db:
+    image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+    environment:
+      POSTGRES_DB: simulator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${SIM_DB_ADMIN_PASSWORD}
+      DB_OWNER_PASSWORD: ${SIM_DB_OWNER_PASSWORD}
+      DB_RUNTIME_PASSWORD: ${SIM_DB_RUNTIME_PASSWORD}
+    volumes:
+      - simulator_db:/var/lib/postgresql/data
+    healthcheck: *db-health
+  mailpit:
+    image: axllent/mailpit:v1.32.0@sha256:0790692be935ea4420d085694f7985b1f692ca6a8771ab0e0bd8ba75ac180498
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_AGE: 7d
+      MP_SMTP_DISABLE_RDNS: 'true'
+    ports: ['127.0.0.1:${MAIL_PORT:-8025}:8025']
+    volumes: ['mail:/data']
+  web:
+    <<: *app
+    restart: unless-stopped
+    command: ['python','manage.py','runserver','0.0.0.0:8000','--noreload','--insecure']
+    ports: ['127.0.0.1:${WEB_PORT:-8000}:8000']
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: ['CMD', 'python', '-c', "import urllib.request;urllib.request.urlopen('http://localhost:8000/health/live/',timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+  worker:
+    <<: *app
+    restart: unless-stopped
+    command: ['python','manage.py','run_worker']
+    depends_on:
+      db: {condition: service_healthy}
+  simulator:
+    <<: *app
+    restart: unless-stopped
+    command: ['python','manage.py','runserver','0.0.0.0:8001','--noreload','--settings=config.simulator_settings']
+    environment: &sim-environment
+      <<: *environment
+      DATABASE_URL: postgresql://mprp_runtime:${SIM_DB_RUNTIME_PASSWORD}@simulator_db:5432/simulator
+      SIMULATOR_DATABASE_URL: postgresql://mprp_runtime:${SIM_DB_RUNTIME_PASSWORD}@simulator_db:5432/simulator
+      CALLBACK_ORIGIN: http://web:8000
+    depends_on:
+      simulator_db: {condition: service_healthy}
+    healthcheck:
+      test: ['CMD','python','-c',"import urllib.request;urllib.request.urlopen('http://localhost:8001/health/live/',timeout=2)"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+  simulator_worker:
+    <<: *app
+    restart: unless-stopped
+    command: ['python','manage.py','run_simulator_worker','--settings=config.simulator_settings']
+    environment: *sim-environment
+    depends_on:
+      simulator_db: {condition: service_healthy}
+  role_setup:
+    <<: *app
+    profiles: ['tools']
+    environment:
+      <<: *environment
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+      DB_OWNER_PASSWORD: ${DB_OWNER_PASSWORD}
+      DB_RUNTIME_PASSWORD: ${DB_RUNTIME_PASSWORD}
+      DB_PURGE_PASSWORD: ${DB_PURGE_PASSWORD}
+      SIM_DB_ADMIN_PASSWORD: ${SIM_DB_ADMIN_PASSWORD}
+      SIM_DB_OWNER_PASSWORD: ${SIM_DB_OWNER_PASSWORD}
+      SIM_DB_RUNTIME_PASSWORD: ${SIM_DB_RUNTIME_PASSWORD}
+      SIM_DB_PURGE_PASSWORD: ${SIM_DB_PURGE_PASSWORD}
+    command: ['python','scripts/provision_roles.py']
+  migrate:
+    <<: *app
+    profiles: ['tools']
+    environment:
+      <<: *environment
+      DATABASE_URL: postgresql://mprp_owner:${DB_OWNER_PASSWORD}@db:5432/mprp
+    command: ['python','manage.py','migrate','--noinput']
+  simulator_migrate:
+    <<: *app
+    profiles: ['tools']
+    environment:
+      <<: *sim-environment
+      DATABASE_URL: postgresql://mprp_owner:${SIM_DB_OWNER_PASSWORD}@simulator_db:5432/simulator
+      SIMULATOR_DATABASE_URL: postgresql://mprp_owner:${SIM_DB_OWNER_PASSWORD}@simulator_db:5432/simulator
+    command: ['python','manage.py','migrate','--noinput','--settings=config.simulator_settings']
+volumes:
+  main_db:
+  simulator_db:
+  mail:

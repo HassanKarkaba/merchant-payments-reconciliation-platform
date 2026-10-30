@@ -1,0 +1,35 @@
+services:
+  web:
+    environment:
+      DJANGO_DEBUG: '0'
+    command: ['python','manage.py','runserver','0.0.0.0:8000','--noreload','--insecure']
+  tests:
+    extends:
+      file: compose.yaml
+      service: web
+    profiles: ['verification']
+    restart: 'no'
+    build:
+      context: .
+      target: verify
+    image: ${COMPOSE_PROJECT_NAME}:verify
+    ports: !reset []
+    healthcheck: !reset null
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_ADMIN_PASSWORD}@db:5432/mprp
+      MPRP_VERIFY_PROJECT: ${COMPOSE_PROJECT_NAME}
+    command: ['python','manage.py','test','--noinput','--verbosity=2']
+  simulator_tests:
+    extends: tests
+    environment:
+      DATABASE_URL: postgresql://postgres:${SIM_DB_ADMIN_PASSWORD}@simulator_db:5432/simulator
+      SIMULATOR_DATABASE_URL: postgresql://postgres:${SIM_DB_ADMIN_PASSWORD}@simulator_db:5432/simulator
+    command: ['python','manage.py','test','processor_sim','--noinput','--verbosity=2','--settings=config.simulator_settings']
+  journey:
+    extends: tests
+    environment:
+      DATABASE_URL: postgresql://mprp_runtime:${DB_RUNTIME_PASSWORD}@db:5432/mprp
+    command: ['python','tests/integration/journey.py']
+  browser:
+    extends: journey
+    command: ['python','tests/browser/smoke.py']

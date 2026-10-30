@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block title %}Payment action needs review{% endblock %}{% block content %}<h1>Review this payment action</h1>{% include "includes/form.html" %}<p>Your input did not create a new accepted financial action.</p><p><a class="button secondary" href="{% url 'payments:detail' merchant.id payment.id %}">Return to current payment details</a></p>{% endblock %}

@@ -1,0 +1,9 @@
+.git
+.local
+.env
+.venv
+**/__pycache__
+**/*.pyc
+*.docx
+*.zip
+*.log

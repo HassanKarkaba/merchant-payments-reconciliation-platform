@@ -1,0 +1,4 @@
+from django.urls import path
+from . import views
+app_name='accounts'
+urlpatterns=[path('resend-verification/',views.resend_verification,name='resend_verification'),path('register/',views.register,name='register'),path('verify/<str:token>/',views.verify,name='verify'),path('login/',views.login_view,name='login'),path('mfa/',views.mfa,name='mfa'),path('mfa/enroll/',views.enroll,name='enroll'),path('step-up/',views.step_up,name='step_up'),path('logout/',views.logout_view,name='logout'),path('logout-all/',views.logout_all,name='logout_all'),path('reset/',views.reset,name='reset'),path('reset/<str:token>/',views.reset,name='reset_token'),path('profile/',views.profile,name='profile'),path('recovery-codes/',views.codes,name='codes'),path('invitations/<str:token>/',views.invitation,name='invitation'),path('deactivate/',views.deactivate,name='deactivate')]
