@@ -7,3 +7,11 @@ __pycache__/
 *.sqlite3
 *.log
 .DS_Store
+
+.local/
+.local-*/
+.env
+.env.*
+!.env.example
+__MACOSX/
+._*
